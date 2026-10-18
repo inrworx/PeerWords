@@ -99,6 +99,8 @@
   .belly b { font-family: var(--display); font-weight: 400; color: var(--accent); }
   .belly small { display: block; color: var(--muted); font: 400 12px/1.3 var(--mono); }
   .belly[hidden], .result[hidden] { display: none; }
+  .belly .clue { margin-top: 4px; font-style: italic; }
+  .belly .clue.muted { color: var(--muted); }
 
   .result { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: grid; gap: 10px; text-align: center; }
   .result h2 { margin: 0; font: 400 26px/1.1 var(--display); color: var(--accent); }
@@ -468,6 +470,54 @@ $('#resetBtn').addEventListener('click', () => {
   setQuorum('Quorum idle', ''); renderNodes();
 });
 
+/* ---------- Belly's AI clue (PeerBelly Game API) ---------- */
+// The letter hint above stays the game's real hint. This asks the PeerBelly
+// network for a one-line clue on top of it. Any failure just leaves the clue
+// out. Set window.PEERBELLY_API before this script to point at another server,
+// or to '' to turn the clue off. Pages opened from file:// skip it unless set.
+const BELLY_API = typeof window.PEERBELLY_API === 'string' ? window.PEERBELLY_API.replace(/\/+$/, '')
+  : (location.protocol === 'https:' || location.protocol === 'http:') ? 'https://api.peerbelly.com' : '';
+const BELLY_TIMEOUT_MS = 12000;
+let bellySession = null;
+function bellyId() { return Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, '0')).join(''); }
+async function bellyFetch(path, opts, signal) {
+  const r = await fetch(BELLY_API + path, { ...opts, signal, credentials: 'omit' });
+  const body = await r.json().catch(() => null);
+  if (!r.ok) throw new Error((body && body.error && body.error.code) || `HTTP ${r.status}`);
+  return body;
+}
+async function bellySessionToken(signal) {
+  if (bellySession && Date.parse(bellySession.expiresAt) - Date.now() > 60000) return bellySession;
+  bellySession = await bellyFetch('/v1/games/sessions', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ gameId: 'peerwords' })
+  }, signal);
+  return bellySession;
+}
+// Resolves to the clue text, or null when there is none.
+async function askBellyClue(answer, roundId) {
+  if (!BELLY_API) return null;
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), BELLY_TIMEOUT_MS);
+  try {
+    const ses = await bellySessionToken(ctl.signal);
+    const auth = { Authorization: `Bearer ${ses.token}` }, key = `${roundId}-${bellyId()}`;
+    let job = await bellyFetch('/v1/inference', {
+      method: 'POST',
+      headers: { ...auth, 'Content-Type': 'application/json', 'Idempotency-Key': key },
+      body: JSON.stringify({ gameId: 'peerwords', taskType: 'words.generate_clue', sessionId: ses.sessionId,
+        requestId: key, input: { roundId, answer }, constraints: { deadlineMs: 8000 } })
+    }, ctl.signal);
+    while (job.status === 'queued' || job.status === 'running') {
+      await new Promise(r => setTimeout(r, 700));
+      job = await bellyFetch(`/v1/jobs/${encodeURIComponent(job.jobId)}`, { headers: auth }, ctl.signal);
+    }
+    const clue = job.status === 'completed' && job.result && job.result.output && job.result.output.clue;
+    return typeof clue === 'string' && clue.trim() ? clue.trim().slice(0, 140) : null;
+  } catch (e) {
+    if (e && e.message === 'UNAUTHORIZED') bellySession = null;
+    return null;
+  } finally { clearTimeout(timer); }
+}
+
 /* ---------- game ---------- */
 let S = null;
 let toastTimer = 0;
@@ -659,6 +709,8 @@ function renderHint() {
   const line = el('div'); line.appendChild(el('b', null, 'Belly says '));
   line.appendChild(document.createTextNode(`slot ${S.hint.pos} is the letter ${S.hint.letter}.`));
   wrap.appendChild(line);
+  if (S.hint.clue) wrap.appendChild(el('div', 'clue', S.hint.clue));
+  else if (S.hint.clueLoading) wrap.appendChild(el('div', 'clue muted', 'Belly is thinking of a clue…'));
   wrap.appendChild(el('small', null, S.hint.note || 'verified by the node quorum'));
   b.appendChild(wrap);
 }
@@ -673,6 +725,13 @@ $('#hintBtn').addEventListener('click', async () => {
   const [p, letter] = out.value.split(':');
   S.hint = { pos: Number(p), letter, note: out.degraded ? 'scored locally, unsigned' : `verified by ${out.agree}/${out.total} nodes` };
   S.busy = false; say(''); renderHint(); saveDaily(); setButtons();
+  const hint = S.hint, round = S.mode === 'daily' ? `daily-${DAY_NUM + 1}` : `practice-${bellyId()}`;
+  if (!BELLY_API) return;
+  hint.clueLoading = true; renderHint();
+  const clue = await askBellyClue(S.answer, round);
+  delete hint.clueLoading;
+  if (clue) hint.clue = clue;
+  if (S.hint === hint) { renderHint(); saveDaily(); }
 });
 $('#modeBtn').addEventListener('click', () => {
   if (S.busy) return;
@@ -695,6 +754,7 @@ function startDaily() {
       S.guesses.push(g); S.patterns.push(pattern); setRowStatic(r, g, pattern); updateKeys(g, pattern);
     });
     S.hint = p.hint || null;
+    if (S.hint) delete S.hint.clueLoading; // a reload mid-request: that clue is gone
     S.status = S.patterns.includes('GGGGG') ? 'won' : S.guesses.length >= 6 ? 'lost' : 'playing';
     renderHint();
     if (S.status !== 'playing') finish(false);
