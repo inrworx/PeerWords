@@ -218,7 +218,7 @@
       <div class="board-wrap">
         <div id="board" class="board" role="grid" aria-label="Guess board"></div>
         <div id="bubble" class="bubble" role="status" aria-live="polite" hidden>
-          <b>Belly</b><span id="bubbleText"></span>
+          <b id="bubbleLabel">Belly</b><span id="bubbleText"></span>
           <button id="bubbleClose" class="bubble-x" type="button" aria-label="Close">×</button>
         </div>
       </div>
@@ -692,6 +692,7 @@ let bubbleTimer = 0;
 function showBubble(text, { row = null, story = false, muted = false } = {}) {
   const b = $('#bubble');
   clearTimeout(bubbleTimer);
+  $('#bubbleLabel').textContent = story ? 'Belly Fun Fact:' : 'Belly';
   $('#bubbleText').textContent = text;
   b.classList.toggle('story', story); b.classList.toggle('muted', muted);
   b.classList.toggle('centered', story && row == null);
