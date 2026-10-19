@@ -26,23 +26,31 @@ npm run serve     # http://localhost:8080
 
 Hints ("Ask Belly for a hint") go through the same quorum.
 
-## Belly's AI clue
+## Belly on the PeerBelly network
 
-After the letter hint, the page also asks the real PeerBelly network for a one-line clue about the word, written by an AI model on a PeerBelly node. It uses the PeerBelly Game API (`words.generate_clue`):
+Three extras come from an AI model on a real PeerBelly node, through the PeerBelly Game API:
+
+- **Clue** (`words.generate_clue`): a one-line clue under the letter hint, in italics, saved with the daily game. The coordinator rejects any clue that contains the word.
+- **Reactions** (`words.react_guess`): a short line from Belly in a speech bubble over the board, under the row just played, after each guess that doesn't end the round. It fades after a few seconds. Only the guess and its tile pattern are sent, never the answer. A reaction that arrives after the next guess is dropped.
+- **Word story** (`words.word_story`): once the round ends, what the word means and a fun fact, in the same bubble over the board until you close it. Saved with the daily game.
+
+None of them affect scoring, and the game never waits on them. Each one works like this:
 
 1. `POST /v1/games/sessions` with `{gameId: 'peerwords'}` gets an anonymous session. The coordinator only allows this from `https://games.peerbelly.com`, and limits sessions and jobs per IP.
-2. `POST /v1/inference` submits the clue job with an `Idempotency-Key`.
-3. `GET /v1/jobs/{jobId}` is polled until the job finishes, for up to 12 seconds.
+2. `POST /v1/inference` submits the job with an `Idempotency-Key`.
+3. `GET /v1/jobs/{jobId}` is polled until the job finishes.
 
-The clue appears under the letter hint in italics and is saved with the daily game. The coordinator rejects any clue that contains the word. If the network is busy or slow it sends a simple fallback clue, and if the API cannot be reached at all the page just shows the letter hint, as before.
+If the network is busy or slow, the coordinator sends a simple fallback line instead. If the API cannot be reached at all, the extras are left out and the game plays exactly as before. A full game uses at most 7 requests.
 
-The base URL is `https://api.peerbelly.com`. Set `window.PEERBELLY_API` before the game script to use another server, or to `''` to turn the clue off. A page opened from `file://` skips the clue unless `window.PEERBELLY_API` is set.
+The base URL is `https://api.peerbelly.com`. Set `window.PEERBELLY_API` before the game script to use another server, or to `''` to turn the extras off. A page opened from `file://` skips them unless `window.PEERBELLY_API` is set.
 
 This follows the node enforcement idea in the PeerBelly blueprint: quorum agreement, canary jobs, strikes, and quarantine.
 
 ## What is simulated
 
-The six scoring nodes run inside the page; only Belly's AI clue contacts a PeerBelly server. "Corrupt a node" makes one simulated node return tampered results so you can watch the quorum catch it.
+The network panel folds away by tapping its title, so the board has the screen. It starts folded on phones and open on wider screens, and the page remembers your choice.
+
+The six scoring nodes run inside the page; only Belly's clue, reactions and word story contact a PeerBelly server. "Corrupt a node" makes one simulated node return tampered results so you can watch the quorum catch it.
 
 The single place to replace with the real network is `dispatch()` in `index.html`. It needs to return `{ value, agree, total, degraded }` for a job `{ type: 'score' | 'hint', ... }`. The page does not yet define a wire format for the real network. The signatures are placeholders (FNV hash), not real cryptographic signatures.
 
@@ -58,7 +66,7 @@ npm test
 ```
 
 - `tests/core.test.js` runs the scoring, quorum voting, tamper, and word list logic with no browser. It covers repeated-letter cases such as `speed` against `erase`.
-- `tests/e2e.test.js` plays the game in headless Chromium with Playwright: typing and rejecting words, tile colors, the hint, the AI clue against a mocked Game API (including rate-limited and unreachable), winning, reload restore, stats, tamper detection and quarantine, the on-screen keyboard, and horizontal overflow at phone width.
+- `tests/e2e.test.js` plays the game in headless Chromium with Playwright: typing and rejecting words, tile colors, the hint, the AI clue, reactions and word story against a mocked Game API (including rate-limited and unreachable), winning, reload restore, stats, tamper detection and quarantine, the on-screen keyboard, the folding network panel, and horizontal overflow at phone width.
 
 ## Files
 
