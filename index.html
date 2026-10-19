@@ -1,3 +1,7 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>PeerWords</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -81,7 +85,7 @@
   .bubble { position: absolute; left: 50%; top: 0; z-index: 5; width: max-content; max-width: min(300px, 92%);
     transform: translateX(-50%); background: var(--panel); color: var(--ink); border: 2px solid var(--gold); border-radius: 18px;
     padding: 10px 34px 10px 14px; box-shadow: 0 10px 28px rgba(7, 23, 61, .28); font-style: italic; line-height: 1.35;
-    animation: bubble-in .22s ease-out; }
+    animation: bubble-in .22s ease-out; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
   .bubble b { display: block; font: 400 15px/1.2 var(--display); font-style: normal; color: var(--accent); margin-bottom: 2px; }
   .bubble::before { content: ''; position: absolute; left: 50%; top: -9px; width: 14px; height: 14px; background: var(--panel);
     border-left: 2px solid var(--gold); border-top: 2px solid var(--gold); transform: translateX(-50%) rotate(45deg); }
@@ -162,6 +166,25 @@
   /* Panel folded: one centered column, logo and tagline lined up over the board. */
   .net-folded .top { flex-direction: column; align-items: center; text-align: center; max-width: 460px; width: 100%; margin-inline: auto; }
   .net-folded .logo img { margin-inline: auto; }
+  /* Phones: compact header and a board sized to the screen height, so the board and keyboard fit without scrolling. */
+  @media (max-width: 600px) {
+    body { padding-block: max(10px, env(safe-area-inset-top, 0px)) 28px; font-size: 14px; }
+    .shell { gap: 10px; }
+    .top, .net-folded .top { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; text-align: center; gap: 6px 12px; }
+    .top > div { display: contents; }
+    .logo img, .net-folded .logo img { width: min(62vw, 210px); margin: 0; }
+    .tag { order: 3; flex-basis: 100%; margin: 0; font-size: 13px; line-height: 1.35; max-width: none; }
+    .game { gap: 8px; }
+    .status { min-height: 20px; font-size: 14px; }
+    .board { gap: 5px; width: min(100%, 340px, max(210px, calc((100svh - 345px) * 5 / 6))); }
+    .row { gap: 5px; }
+    .tile { border-radius: 8px; font-size: clamp(22px, 7.5vw, 32px); }
+    .kb { gap: 5px; }
+    .krow { gap: 4px; }
+    .key { height: clamp(42px, 6.2svh, 52px); }
+    .result { padding: 12px; }
+  }
+  @media (max-width: 600px) and (max-height: 720px) { .tag { display: none; } }
   .net-body { display: grid; gap: 14px; min-width: 0; }
   .net-body[hidden] { display: none; }
   .pill { font: 500 12px/1 var(--mono); padding: 6px 10px; border-radius: 999px; background: var(--sunk); border: 1px solid var(--line); color: var(--muted); }
@@ -711,11 +734,15 @@ function showBubble(text, { row = null, story = false, muted = false } = {}) {
   if (!story) bubbleTimer = setTimeout(hideBubble, 6000);
 }
 function hideBubble() { clearTimeout(bubbleTimer); $('#bubble').hidden = true; }
-$('#bubbleClose').addEventListener('click', () => { if (S.status !== 'playing') S.storyClosed = true; hideBubble(); });
+// Tapping anywhere on the bubble (or its ×) closes it.
+$('#bubble').addEventListener('click', () => {
+  if (S.status !== 'playing') { S.storyClosed = true; saveDaily(); }
+  hideBubble();
+});
 
 function saveDaily() {
   if (S.mode !== 'daily') return;
-  store('bw:daily', { key: TODAY_KEY, guesses: S.guesses, status: S.status, hint: S.hint, story: S.story });
+  store('bw:daily', { key: TODAY_KEY, guesses: S.guesses, status: S.status, hint: S.hint, story: S.story, storyClosed: !!S.storyClosed });
 }
 function loadStats() { return store('bw:stats') || { played: 0, wins: 0, streak: 0, best: 0, dist: [0, 0, 0, 0, 0, 0], lastWin: '' }; }
 function renderStats() {
@@ -850,6 +877,7 @@ function startDaily() {
     });
     S.hint = p.hint || null;
     S.story = typeof p.story === 'string' ? p.story : null;
+    S.storyClosed = !!p.storyClosed;
     if (S.hint) delete S.hint.clueLoading; // a reload mid-request: that clue is gone
     S.status = S.patterns.includes('GGGGG') ? 'won' : S.guesses.length >= 6 ? 'lost' : 'playing';
     renderHint();

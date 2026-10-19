@@ -31,8 +31,8 @@ Hints ("Ask Belly for a hint") go through the same quorum.
 Three extras come from an AI model on a real PeerBelly node, through the PeerBelly Game API:
 
 - **Clue** (`words.generate_clue`): a one-line clue under the letter hint, in italics, saved with the daily game. The coordinator rejects any clue that contains the word.
-- **Reactions** (`words.react_guess`): a short line from Belly in a speech bubble over the board, under the row just played, after each guess that doesn't end the round. It fades after a few seconds. Only the guess and its tile pattern are sent, never the answer. A reaction that arrives after the next guess is dropped.
-- **Word story** (`words.word_story`): once the round ends, what the word means and a fun fact, in the same bubble over the board until you close it. Saved with the daily game.
+- **Reactions** (`words.react_guess`): a short line from Belly in a speech bubble over the board, under the row just played, after each guess that doesn't end the round. It fades after a few seconds, or tap it to close it sooner. Only the guess and its tile pattern are sent, never the answer. A reaction that arrives after the next guess is dropped.
+- **Word story** (`words.word_story`): once the round ends, what the word means and a fun fact, in the same bubble over the board until you tap it to close it. Saved with the daily game, and stays closed once closed.
 
 None of them affect scoring, and the game never waits on them. Each one works like this:
 
@@ -83,7 +83,7 @@ npm test
 ```
 
 - `tests/core.test.js` runs the scoring, quorum voting, tamper, and word list logic with no browser. It covers repeated-letter cases such as `speed` against `erase`.
-- `tests/e2e.test.js` plays the game in headless Chromium with Playwright: typing and rejecting words, tile colors, the hint, the AI clue, reactions and word story against a mocked Game API (including rate-limited and unreachable), winning, reload restore, stats, tamper detection and quarantine, the on-screen keyboard, the folding network panel, and horizontal overflow at phone width.
+- `tests/e2e.test.js` plays the game in headless Chromium with Playwright: typing and rejecting words, tile colors, the hint, the AI clue, reactions and word story against a mocked Game API (including rate-limited and unreachable), winning, reload restore, stats, tamper detection and quarantine, the on-screen keyboard, the folding network panel, horizontal overflow at phone width, and that the board and keyboard fit on phone screens without scrolling.
 
 ## Files
 

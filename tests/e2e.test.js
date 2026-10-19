@@ -140,6 +140,17 @@ const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', n
   ok('no script errors (phone dark)', errs2.length === 0, errs2.join(' || '));
   await ctx.close();
 
+  // ---- real phones (mobile viewport, browser bars taking some height): board and keyboard fit without scrolling
+  for (const [w, h] of [[360, 560], [390, 664], [430, 740]]) {
+    ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+    page = await ctx.newPage(); await page.goto(FILE); await page.waitForSelector('.tile');
+    const m = await page.evaluate(() => ({ docW: document.documentElement.scrollWidth, kb: document.getElementById('kb').getBoundingClientRect().bottom, h: innerHeight }));
+    ok(`page laid out at phone width ${w}px`, m.docW === w, JSON.stringify(m));
+    ok(`board and keyboard fit on a ${w}x${h} screen`, m.kb <= m.h, JSON.stringify(m));
+    if (w === 390) await page.screenshot({ path: path.join(OUT, 'shot-phone.png') });
+    await ctx.close();
+  }
+
   // ---- Belly's AI clue, against a mocked PeerBelly Game API
   async function clueRun(mode) {
     const c = await browser.newContext({ viewport: { width: 1200, height: 900 }, reducedMotion: 'reduce' });
@@ -222,8 +233,8 @@ const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', n
     const pos = await pg.evaluate(() => { const b = document.getElementById('bubble').getBoundingClientRect(), r = document.querySelectorAll('.row')[1].getBoundingClientRect(), bd = document.getElementById('board').getBoundingClientRect(); return { top: b.top, rowBottom: r.bottom, inBoard: b.top < bd.bottom }; });
     ok('reaction bubble sits just under the row it is about', pos.top > pos.rowBottom && pos.inBoard, JSON.stringify(pos));
     await pg.screenshot({ path: path.join(OUT, 'shot-reaction.png') });
-    await pg.click('#bubbleClose');
-    ok('bubble closes', await pg.isHidden('#bubble'));
+    await pg.click('#bubbleText');
+    ok('tapping the reaction bubble closes it', await pg.isHidden('#bubble'));
     await pg.keyboard.type(ans); await pg.keyboard.press('Enter');
     await pg.waitForSelector('#result:not([hidden])', { timeout: 10000 });
     await pg.waitForFunction(() => !document.getElementById('bubble').hidden && document.getElementById('bubble').classList.contains('story') && document.getElementById('bubbleText').textContent.includes('fun fact'), null, { timeout: 10000 });
@@ -236,6 +247,10 @@ const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', n
     const before = seen.jobs.length;
     await pg.reload(); await pg.waitForSelector('.tile');
     ok('story survives reload without asking again', (await pg.textContent('#bubbleText')).includes('fun fact') && await pg.isVisible('#bubble') && seen.jobs.length === before);
+    await pg.click('#bubbleLabel');
+    ok('tapping the Fun Fact bubble closes it', await pg.isHidden('#bubble'));
+    await pg.reload(); await pg.waitForSelector('.tile');
+    ok('closed Fun Fact stays closed after reload', await pg.isHidden('#bubble'));
     ok('no script errors (story and reactions)', errs.length === 0, errs.join(' || '));
     await c.close();
   }
