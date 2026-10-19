@@ -1,0 +1,9 @@
+	# PeerWords. Add inside the games.peerbelly.com site, next to the /pong and
+	# /racing handlers and above the final 404 `handle`.
+	redir /words /words/ 308
+
+	handle_path /words/* {
+		root * /var/www/games/words
+		try_files {path} /index.html
+		file_server
+	}
