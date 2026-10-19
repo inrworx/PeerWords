@@ -208,7 +208,7 @@ const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', n
     const reacts = seen.jobs.filter(j => j.taskType === 'words.react_guess');
     ok('a reaction is asked for after each guess', reacts.length === 2 && reacts[1].input.guessNumber === 2 && /^[GYB]{5}$/.test(reacts[0].input.pattern), JSON.stringify(reacts.map(r => r.input)));
     ok('reactions never send the answer', reacts.every(r => !('answer' in r.input) && !JSON.stringify(r).includes(ans)));
-    ok('reaction shown in a bubble over the board', (await pg.textContent('#bubbleText')) === 'Guess 2, keep it up!' && await pg.isVisible('#bubble'));
+    ok('reaction shown in a bubble over the board', (await pg.textContent('#bubbleText')) === 'Guess 2, keep it up!' && (await pg.textContent('#bubbleLabel')) === 'Belly' && await pg.isVisible('#bubble'));
     const pos = await pg.evaluate(() => { const b = document.getElementById('bubble').getBoundingClientRect(), r = document.querySelectorAll('.row')[1].getBoundingClientRect(), bd = document.getElementById('board').getBoundingClientRect(); return { top: b.top, rowBottom: r.bottom, inBoard: b.top < bd.bottom }; });
     ok('reaction bubble sits just under the row it is about', pos.top > pos.rowBottom && pos.inBoard, JSON.stringify(pos));
     await pg.screenshot({ path: path.join(OUT, 'shot-reaction.png') });
@@ -221,6 +221,7 @@ const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', n
     ok('story asked for once the round ends', !!story && story.input.answer === ans && story.input.solved === true && story.input.guesses === 3, JSON.stringify(story && story.input));
     ok('no reaction for the winning guess', seen.jobs.filter(j => j.taskType === 'words.react_guess').length === 2);
     ok('story shown in the bubble once the round ends', (await pg.textContent('#bubbleText')).includes('fun fact'));
+    ok('story bubble is headed Belly Fun Fact:', (await pg.textContent('#bubbleLabel')) === 'Belly Fun Fact:');
     await pg.screenshot({ path: path.join(OUT, 'shot-story.png'), fullPage: true });
     const before = seen.jobs.length;
     await pg.reload(); await pg.waitForSelector('.tile');
