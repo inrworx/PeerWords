@@ -48,6 +48,8 @@ This follows the node enforcement idea in the PeerBelly blueprint: quorum agreem
 
 ## What is simulated
 
+The network panel folds away by tapping its title, so the board has the screen. It starts folded on phones and open on wider screens, and the page remembers your choice.
+
 The six scoring nodes run inside the page; only Belly's clue, reactions and word story contact a PeerBelly server. "Corrupt a node" makes one simulated node return tampered results so you can watch the quorum catch it.
 
 The single place to replace with the real network is `dispatch()` in `index.html`. It needs to return `{ value, agree, total, degraded }` for a job `{ type: 'score' | 'hint', ... }`. The page does not yet define a wire format for the real network. The signatures are placeholders (FNV hash), not real cryptographic signatures.
@@ -64,7 +66,7 @@ npm test
 ```
 
 - `tests/core.test.js` runs the scoring, quorum voting, tamper, and word list logic with no browser. It covers repeated-letter cases such as `speed` against `erase`.
-- `tests/e2e.test.js` plays the game in headless Chromium with Playwright: typing and rejecting words, tile colors, the hint, the AI clue, reactions and word story against a mocked Game API (including rate-limited and unreachable), winning, reload restore, stats, tamper detection and quarantine, the on-screen keyboard, and horizontal overflow at phone width.
+- `tests/e2e.test.js` plays the game in headless Chromium with Playwright: typing and rejecting words, tile colors, the hint, the AI clue, reactions and word story against a mocked Game API (including rate-limited and unreachable), winning, reload restore, stats, tamper detection and quarantine, the on-screen keyboard, the folding network panel, and horizontal overflow at phone width.
 
 ## Files
 

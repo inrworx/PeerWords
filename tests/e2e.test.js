@@ -23,6 +23,7 @@ const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', n
   ok('board has 30 tiles', info.tiles === 30);
   ok('keyboard has 28 keys', info.keys === 28, String(info.keys));
   ok('6 nodes rendered', info.nodes === 6);
+  ok('network panel open by default on desktop', await page.isVisible('#nodes'));
   ok('logo image decodes', info.logo > 0, String(info.logo));
 
   // too short
@@ -118,6 +119,13 @@ const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', n
   await page.waitForFunction(() => S.guesses.length === 1 && !S.busy, null, { timeout: 8000 });
   const sw = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
   ok('no horizontal scroll at 390px', sw.scroll <= sw.client, JSON.stringify(sw));
+  ok('network panel folded by default on a phone', (await page.isHidden('#netBody')) && (await page.getAttribute('#netToggle', 'aria-expanded')) === 'false');
+  ok('quorum pill still shown when folded', await page.isVisible('#quorum'));
+  await page.click('#netToggle');
+  ok('tapping the header opens the panel', await page.isVisible('#nodes'));
+  await page.reload(); await page.waitForSelector('.tile');
+  ok('panel choice remembered', await page.isVisible('#nodes'));
+  await page.click('#netToggle');
   await page.screenshot({ path: path.join(OUT, 'shot-dark-phone.png'), fullPage: true });
   ok('no script errors (phone dark)', errs2.length === 0, errs2.join(' || '));
   await ctx.close();

@@ -151,6 +151,12 @@
   .net { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
   .net-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
   h2.net-title { margin: 0; font: 400 22px/1.1 var(--display); }
+  .net-toggle { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; border-radius: 6px; }
+  .net-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .chev { flex: none; width: 10px; height: 10px; border-right: 3px solid currentColor; border-bottom: 3px solid currentColor; transform: translateY(-2px) rotate(45deg); transition: transform .15s; }
+  .net-toggle[aria-expanded="false"] .chev { transform: translateY(1px) rotate(-45deg); }
+  .net-body { display: grid; gap: 14px; min-width: 0; }
+  .net-body[hidden] { display: none; }
   .pill { font: 500 12px/1 var(--mono); padding: 6px 10px; border-radius: 999px; background: var(--sunk); border: 1px solid var(--line); color: var(--muted); }
   .pill[data-tone="ok"] { color: var(--ok); border-color: var(--ok); }
   .pill[data-tone="warn"] { color: var(--warn); border-color: var(--warn); }
@@ -241,9 +247,14 @@
 
     <aside class="net" aria-label="PeerBelly network">
       <div class="net-head">
-        <h2 class="net-title">PeerBelly network</h2>
+        <h2 class="net-title">
+          <button id="netToggle" class="net-toggle" type="button" aria-expanded="true" aria-controls="netBody">
+            PeerBelly network <span class="chev" aria-hidden="true"></span>
+          </button>
+        </h2>
         <span id="quorum" class="pill">Quorum idle</span>
       </div>
+      <div id="netBody" class="net-body">
       <p class="net-note">Simulated network running inside this page. Each guess goes to three nodes. They sign what they computed, the coordinator keeps the majority answer, and a node that disagrees gets a strike. Two strikes quarantines it and it stops getting work. Every third job also carries a canary with a known answer.</p>
       <ul id="nodes" class="nodes"></ul>
       <div class="net-actions">
@@ -252,6 +263,7 @@
       </div>
       <h3>Audit ledger</h3>
       <ol id="ledger" class="ledger"></ol>
+      </div>
     </aside>
   </main>
 </div>
@@ -834,6 +846,18 @@ function startDaily() {
     addNote('earlier guesses restored from this browser', 'ok');
   }
   setButtons();
+}
+
+// The network panel folds away so the board has the screen; folded by default on phones.
+function setNetOpen(open, remember) {
+  $('#netToggle').setAttribute('aria-expanded', String(open));
+  $('#netBody').hidden = !open;
+  if (remember) store('bw:net', open ? 'open' : 'closed');
+}
+$('#netToggle').addEventListener('click', () => setNetOpen($('#netBody').hidden, true));
+{
+  const saved = store('bw:net');
+  setNetOpen(saved ? saved === 'open' : !matchMedia('(max-width: 860px)').matches, false);
 }
 
 renderNodes();
