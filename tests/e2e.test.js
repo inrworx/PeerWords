@@ -140,6 +140,17 @@ const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', n
   ok('no script errors (phone dark)', errs2.length === 0, errs2.join(' || '));
   await ctx.close();
 
+  // ---- real phones (mobile viewport, browser bars taking some height): board and keyboard fit without scrolling
+  for (const [w, h] of [[360, 560], [390, 664], [430, 740]]) {
+    ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+    page = await ctx.newPage(); await page.goto(FILE); await page.waitForSelector('.tile');
+    const m = await page.evaluate(() => ({ docW: document.documentElement.scrollWidth, kb: document.getElementById('kb').getBoundingClientRect().bottom, h: innerHeight }));
+    ok(`page laid out at phone width ${w}px`, m.docW === w, JSON.stringify(m));
+    ok(`board and keyboard fit on a ${w}x${h} screen`, m.kb <= m.h, JSON.stringify(m));
+    if (w === 390) await page.screenshot({ path: path.join(OUT, 'shot-phone.png') });
+    await ctx.close();
+  }
+
   // ---- Belly's AI clue, against a mocked PeerBelly Game API
   async function clueRun(mode) {
     const c = await browser.newContext({ viewport: { width: 1200, height: 900 }, reducedMotion: 'reduce' });

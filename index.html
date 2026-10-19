@@ -1,3 +1,7 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>PeerWords</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -162,6 +166,25 @@
   /* Panel folded: one centered column, logo and tagline lined up over the board. */
   .net-folded .top { flex-direction: column; align-items: center; text-align: center; max-width: 460px; width: 100%; margin-inline: auto; }
   .net-folded .logo img { margin-inline: auto; }
+  /* Phones: compact header and a board sized to the screen height, so the board and keyboard fit without scrolling. */
+  @media (max-width: 600px) {
+    body { padding-block: max(10px, env(safe-area-inset-top, 0px)) 28px; font-size: 14px; }
+    .shell { gap: 10px; }
+    .top, .net-folded .top { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; text-align: center; gap: 6px 12px; }
+    .top > div { display: contents; }
+    .logo img, .net-folded .logo img { width: min(62vw, 210px); margin: 0; }
+    .tag { order: 3; flex-basis: 100%; margin: 0; font-size: 13px; line-height: 1.35; max-width: none; }
+    .game { gap: 8px; }
+    .status { min-height: 20px; font-size: 14px; }
+    .board { gap: 5px; width: min(100%, 340px, max(210px, calc((100svh - 345px) * 5 / 6))); }
+    .row { gap: 5px; }
+    .tile { border-radius: 8px; font-size: clamp(22px, 7.5vw, 32px); }
+    .kb { gap: 5px; }
+    .krow { gap: 4px; }
+    .key { height: clamp(42px, 6.2svh, 52px); }
+    .result { padding: 12px; }
+  }
+  @media (max-width: 600px) and (max-height: 720px) { .tag { display: none; } }
   .net-body { display: grid; gap: 14px; min-width: 0; }
   .net-body[hidden] { display: none; }
   .pill { font: 500 12px/1 var(--mono); padding: 6px 10px; border-radius: 999px; background: var(--sunk); border: 1px solid var(--line); color: var(--muted); }

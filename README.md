@@ -83,7 +83,7 @@ npm test
 ```
 
 - `tests/core.test.js` runs the scoring, quorum voting, tamper, and word list logic with no browser. It covers repeated-letter cases such as `speed` against `erase`.
-- `tests/e2e.test.js` plays the game in headless Chromium with Playwright: typing and rejecting words, tile colors, the hint, the AI clue, reactions and word story against a mocked Game API (including rate-limited and unreachable), winning, reload restore, stats, tamper detection and quarantine, the on-screen keyboard, the folding network panel, and horizontal overflow at phone width.
+- `tests/e2e.test.js` plays the game in headless Chromium with Playwright: typing and rejecting words, tile colors, the hint, the AI clue, reactions and word story against a mocked Game API (including rate-limited and unreachable), winning, reload restore, stats, tamper detection and quarantine, the on-screen keyboard, the folding network panel, horizontal overflow at phone width, and that the board and keyboard fit on phone screens without scrolling.
 
 ## Files
 
