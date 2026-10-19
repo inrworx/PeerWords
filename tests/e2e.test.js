@@ -222,8 +222,8 @@ const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', n
     const pos = await pg.evaluate(() => { const b = document.getElementById('bubble').getBoundingClientRect(), r = document.querySelectorAll('.row')[1].getBoundingClientRect(), bd = document.getElementById('board').getBoundingClientRect(); return { top: b.top, rowBottom: r.bottom, inBoard: b.top < bd.bottom }; });
     ok('reaction bubble sits just under the row it is about', pos.top > pos.rowBottom && pos.inBoard, JSON.stringify(pos));
     await pg.screenshot({ path: path.join(OUT, 'shot-reaction.png') });
-    await pg.click('#bubbleClose');
-    ok('bubble closes', await pg.isHidden('#bubble'));
+    await pg.click('#bubbleText');
+    ok('tapping the reaction bubble closes it', await pg.isHidden('#bubble'));
     await pg.keyboard.type(ans); await pg.keyboard.press('Enter');
     await pg.waitForSelector('#result:not([hidden])', { timeout: 10000 });
     await pg.waitForFunction(() => !document.getElementById('bubble').hidden && document.getElementById('bubble').classList.contains('story') && document.getElementById('bubbleText').textContent.includes('fun fact'), null, { timeout: 10000 });
@@ -236,6 +236,10 @@ const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', n
     const before = seen.jobs.length;
     await pg.reload(); await pg.waitForSelector('.tile');
     ok('story survives reload without asking again', (await pg.textContent('#bubbleText')).includes('fun fact') && await pg.isVisible('#bubble') && seen.jobs.length === before);
+    await pg.click('#bubbleLabel');
+    ok('tapping the Fun Fact bubble closes it', await pg.isHidden('#bubble'));
+    await pg.reload(); await pg.waitForSelector('.tile');
+    ok('closed Fun Fact stays closed after reload', await pg.isHidden('#bubble'));
     ok('no script errors (story and reactions)', errs.length === 0, errs.join(' || '));
     await c.close();
   }

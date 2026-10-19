@@ -81,7 +81,7 @@
   .bubble { position: absolute; left: 50%; top: 0; z-index: 5; width: max-content; max-width: min(300px, 92%);
     transform: translateX(-50%); background: var(--panel); color: var(--ink); border: 2px solid var(--gold); border-radius: 18px;
     padding: 10px 34px 10px 14px; box-shadow: 0 10px 28px rgba(7, 23, 61, .28); font-style: italic; line-height: 1.35;
-    animation: bubble-in .22s ease-out; }
+    animation: bubble-in .22s ease-out; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
   .bubble b { display: block; font: 400 15px/1.2 var(--display); font-style: normal; color: var(--accent); margin-bottom: 2px; }
   .bubble::before { content: ''; position: absolute; left: 50%; top: -9px; width: 14px; height: 14px; background: var(--panel);
     border-left: 2px solid var(--gold); border-top: 2px solid var(--gold); transform: translateX(-50%) rotate(45deg); }
@@ -711,11 +711,15 @@ function showBubble(text, { row = null, story = false, muted = false } = {}) {
   if (!story) bubbleTimer = setTimeout(hideBubble, 6000);
 }
 function hideBubble() { clearTimeout(bubbleTimer); $('#bubble').hidden = true; }
-$('#bubbleClose').addEventListener('click', () => { if (S.status !== 'playing') S.storyClosed = true; hideBubble(); });
+// Tapping anywhere on the bubble (or its ×) closes it.
+$('#bubble').addEventListener('click', () => {
+  if (S.status !== 'playing') { S.storyClosed = true; saveDaily(); }
+  hideBubble();
+});
 
 function saveDaily() {
   if (S.mode !== 'daily') return;
-  store('bw:daily', { key: TODAY_KEY, guesses: S.guesses, status: S.status, hint: S.hint, story: S.story });
+  store('bw:daily', { key: TODAY_KEY, guesses: S.guesses, status: S.status, hint: S.hint, story: S.story, storyClosed: !!S.storyClosed });
 }
 function loadStats() { return store('bw:stats') || { played: 0, wins: 0, streak: 0, best: 0, dist: [0, 0, 0, 0, 0, 0], lastWin: '' }; }
 function renderStats() {
@@ -850,6 +854,7 @@ function startDaily() {
     });
     S.hint = p.hint || null;
     S.story = typeof p.story === 'string' ? p.story : null;
+    S.storyClosed = !!p.storyClosed;
     if (S.hint) delete S.hint.clueLoading; // a reload mid-request: that clue is gone
     S.status = S.patterns.includes('GGGGG') ? 'won' : S.guesses.length >= 6 ? 'lost' : 'playing';
     renderHint();
