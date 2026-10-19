@@ -31,8 +31,8 @@ Hints ("Ask Belly for a hint") go through the same quorum.
 Three extras come from an AI model on a real PeerBelly node, through the PeerBelly Game API:
 
 - **Clue** (`words.generate_clue`): a one-line clue under the letter hint, in italics, saved with the daily game. The coordinator rejects any clue that contains the word.
-- **Reactions** (`words.react_guess`): a short line from Belly under the board after each guess that doesn't end the round. Only the guess and its tile pattern are sent, never the answer. A reaction that arrives after the next guess is dropped.
-- **Word story** (`words.word_story`): once the round ends, what the word means and a fun fact, shown in the result card and saved with the daily game.
+- **Reactions** (`words.react_guess`): a short line from Belly in a speech bubble over the board, under the row just played, after each guess that doesn't end the round. It fades after a few seconds. Only the guess and its tile pattern are sent, never the answer. A reaction that arrives after the next guess is dropped.
+- **Word story** (`words.word_story`): once the round ends, what the word means and a fun fact, in the same bubble over the board until you close it. Saved with the daily game.
 
 None of them affect scoring, and the game never waits on them. Each one works like this:
 

@@ -76,6 +76,21 @@
 
   .game { display: grid; gap: 14px; min-width: 0; }
   .status { margin: 0; min-height: 24px; text-align: center; font-weight: 600; }
+  .board-wrap { position: relative; }
+  .bubble { position: absolute; left: 50%; top: 0; z-index: 5; width: max-content; max-width: min(300px, 92%);
+    transform: translateX(-50%); background: var(--panel); color: var(--ink); border: 2px solid var(--gold); border-radius: 18px;
+    padding: 10px 34px 10px 14px; box-shadow: 0 10px 28px rgba(7, 23, 61, .28); font-style: italic; line-height: 1.35;
+    animation: bubble-in .22s ease-out; }
+  .bubble b { display: block; font: 400 15px/1.2 var(--display); font-style: normal; color: var(--accent); margin-bottom: 2px; }
+  .bubble::before { content: ''; position: absolute; left: 50%; top: -9px; width: 14px; height: 14px; background: var(--panel);
+    border-left: 2px solid var(--gold); border-top: 2px solid var(--gold); transform: translateX(-50%) rotate(45deg); }
+  .bubble.story { max-width: min(330px, 94%); }
+  .bubble.centered { top: 50%; transform: translate(-50%, -50%); }
+  .bubble.centered::before { display: none; }
+  .bubble.muted span { color: var(--muted); }
+  .bubble[hidden] { display: none; }
+  .bubble-x { position: absolute; top: 4px; right: 6px; border: 0; background: none; color: var(--muted); font-size: 20px; line-height: 1; cursor: pointer; padding: 4px; }
+  @keyframes bubble-in { from { opacity: 0; margin-top: 6px; } }
   .board { display: grid; gap: 6px; width: min(100%, 360px); margin-inline: auto; }
   .row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
   .tile {
@@ -106,10 +121,6 @@
   .result h2 { margin: 0; font: 400 26px/1.1 var(--display); color: var(--accent); }
   .result p { margin: 0; color: var(--muted); }
   .result .answer { font: 400 22px/1 var(--display); letter-spacing: .08em; color: var(--ink); text-transform: uppercase; }
-  .result .story { color: var(--ink); font-style: italic; text-align: left; border-left: 4px solid var(--gold); padding-left: 10px; }
-  .result .story.muted { color: var(--muted); }
-  .result .story[hidden] { display: none; }
-  .reaction { margin: 0; min-height: 20px; text-align: center; font-style: italic; color: var(--muted); }
   .result .next { font: 500 13px/1 var(--mono); color: var(--muted); }
 
   .kb { display: grid; gap: 6px; }
@@ -198,14 +209,18 @@
   <main class="layout">
     <section class="game" aria-label="Game">
       <p id="toast" class="status" role="status" aria-live="polite"></p>
-      <div id="board" class="board" role="grid" aria-label="Guess board"></div>
-      <p id="reaction" class="reaction" aria-live="polite"></p>
+      <div class="board-wrap">
+        <div id="board" class="board" role="grid" aria-label="Guess board"></div>
+        <div id="bubble" class="bubble" role="status" aria-live="polite" hidden>
+          <b>Belly</b><span id="bubbleText"></span>
+          <button id="bubbleClose" class="bubble-x" type="button" aria-label="Close">×</button>
+        </div>
+      </div>
       <div id="belly" class="belly" hidden></div>
       <div id="result" class="result" hidden>
         <h2 id="resultTitle"></h2>
         <p id="resultSub"></p>
         <div id="resultAnswer" class="answer"></div>
-        <p id="resultStory" class="story" hidden></p>
         <div class="actions">
           <button id="shareBtn" class="btn primary" type="button">Copy result</button>
         </div>
@@ -636,7 +651,7 @@ async function submit() {
   const g = S.cur, row = S.guesses.length;
   if (g.length < 5) { shake(row); return say('Not enough letters'); }
   if (!VALID.has(g)) { shake(row); return say("Not in Belly's word list"); }
-  S.busy = true; setButtons(); say('Asking the network…', true);
+  S.busy = true; setButtons(); say('Asking the network…', true); hideBubble();
   const out = await dispatch({ type: 'score', guess: g, answer: S.answer });
   const pattern = out.value;
   S.guesses.push(g); S.patterns.push(pattern); S.cur = '';
@@ -655,11 +670,25 @@ async function submit() {
 async function bellyReact(guess, pattern) {
   if (!BELLY_API) return;
   const state = S, n = S.guesses.length;
-  setReaction('');
   const line = await askBelly('words.react_guess', { roundId: state.roundId, guess, pattern, guessNumber: n }, 'line', { deadlineMs: 5000, maxLen: 100 });
-  if (line && S === state && S.guesses.length === n && S.status === 'playing') setReaction(line);
+  if (line && S === state && S.guesses.length === n && S.status === 'playing') showBubble(line, { row: n - 1 });
 }
-function setReaction(text) { $('#reaction').textContent = text ? `Belly: ${text}` : ''; }
+
+/* Belly's speech bubble over the board, pointing at the row just played. A reaction fades on
+   its own; the word story stays until closed. */
+let bubbleTimer = 0;
+function showBubble(text, { row = null, story = false, muted = false } = {}) {
+  const b = $('#bubble');
+  clearTimeout(bubbleTimer);
+  $('#bubbleText').textContent = text;
+  b.classList.toggle('story', story); b.classList.toggle('muted', muted);
+  b.classList.toggle('centered', story && row == null);
+  b.style.top = row == null ? '' : `${$('#board').children[row].offsetTop + $('#board').children[row].offsetHeight + 12}px`;
+  b.hidden = false;
+  if (!story) bubbleTimer = setTimeout(hideBubble, 6000);
+}
+function hideBubble() { clearTimeout(bubbleTimer); $('#bubble').hidden = true; }
+$('#bubbleClose').addEventListener('click', () => { if (S.status !== 'playing') S.storyClosed = true; hideBubble(); });
 
 function saveDaily() {
   if (S.mode !== 'daily') return;
@@ -691,16 +720,17 @@ function finish(live) {
   $('#resultAnswer').textContent = won ? '' : S.answer;
   $('#resultAnswer').hidden = won;
   $('#result').hidden = false;
-  setReaction('');
   renderStory();
   tickNext();
   if (!S.story) bellyStory();
 }
 function renderStory() {
-  const p = $('#resultStory');
-  p.classList.toggle('muted', !S.story);
-  p.textContent = S.story || (S.storyLoading ? 'Belly is looking up the word…' : '');
-  p.hidden = !p.textContent;
+  if (S.status === 'playing' || S.storyClosed) return;
+  // Under the last row played, so the finished board stays readable; centered when all six rows are full.
+  const row = S.guesses.length < 6 ? S.guesses.length - 1 : null;
+  if (S.story) showBubble(S.story, { row, story: true });
+  else if (S.storyLoading) showBubble('Looking up the word…', { row, story: true, muted: true });
+  else hideBubble();
 }
 // After the round: what the word means and a fun fact. Saved with the daily game.
 async function bellyStory() {
@@ -784,7 +814,7 @@ $('#modeBtn').addEventListener('click', () => {
 });
 
 function start(state) {
-  S = state; buildBoard(); buildKeys(); say(''); setReaction('');
+  S = state; buildBoard(); buildKeys(); say(''); hideBubble();
   $('#result').hidden = true; renderHint(); setButtons();
 }
 function startDaily() {

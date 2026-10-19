@@ -195,23 +195,28 @@ const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', n
     for (const [i, w] of wrong.entries()) {
       await pg.keyboard.type(w); await pg.keyboard.press('Enter');
       await pg.waitForFunction(n => S.guesses.length === n && !S.busy, i + 1, { timeout: 8000 });
-      await pg.waitForFunction(n => document.getElementById('reaction').textContent.includes(`Guess ${n}`), i + 1, { timeout: 8000 });
+      await pg.waitForFunction(n => !document.getElementById('bubble').hidden && document.getElementById('bubbleText').textContent.includes(`Guess ${n}`), i + 1, { timeout: 8000 });
     }
     const reacts = seen.jobs.filter(j => j.taskType === 'words.react_guess');
     ok('a reaction is asked for after each guess', reacts.length === 2 && reacts[1].input.guessNumber === 2 && /^[GYB]{5}$/.test(reacts[0].input.pattern), JSON.stringify(reacts.map(r => r.input)));
     ok('reactions never send the answer', reacts.every(r => !('answer' in r.input) && !JSON.stringify(r).includes(ans)));
-    ok('reaction shown under the board', /Belly: Guess 2, keep it up!/.test(await pg.textContent('#reaction')));
+    ok('reaction shown in a bubble over the board', (await pg.textContent('#bubbleText')) === 'Guess 2, keep it up!' && await pg.isVisible('#bubble'));
+    const pos = await pg.evaluate(() => { const b = document.getElementById('bubble').getBoundingClientRect(), r = document.querySelectorAll('.row')[1].getBoundingClientRect(), bd = document.getElementById('board').getBoundingClientRect(); return { top: b.top, rowBottom: r.bottom, inBoard: b.top < bd.bottom }; });
+    ok('reaction bubble sits just under the row it is about', pos.top > pos.rowBottom && pos.inBoard, JSON.stringify(pos));
+    await pg.screenshot({ path: path.join(OUT, 'shot-reaction.png') });
+    await pg.click('#bubbleClose');
+    ok('bubble closes', await pg.isHidden('#bubble'));
     await pg.keyboard.type(ans); await pg.keyboard.press('Enter');
     await pg.waitForSelector('#result:not([hidden])', { timeout: 10000 });
-    await pg.waitForFunction(() => document.getElementById('resultStory').textContent.includes('fun fact'), null, { timeout: 10000 });
+    await pg.waitForFunction(() => !document.getElementById('bubble').hidden && document.getElementById('bubble').classList.contains('story') && document.getElementById('bubbleText').textContent.includes('fun fact'), null, { timeout: 10000 });
     const story = seen.jobs.find(j => j.taskType === 'words.word_story');
     ok('story asked for once the round ends', !!story && story.input.answer === ans && story.input.solved === true && story.input.guesses === 3, JSON.stringify(story && story.input));
     ok('no reaction for the winning guess', seen.jobs.filter(j => j.taskType === 'words.react_guess').length === 2);
-    ok('reaction cleared when the round ends', (await pg.textContent('#reaction')) === '');
+    ok('story shown in the bubble once the round ends', (await pg.textContent('#bubbleText')).includes('fun fact'));
     await pg.screenshot({ path: path.join(OUT, 'shot-story.png'), fullPage: true });
     const before = seen.jobs.length;
     await pg.reload(); await pg.waitForSelector('.tile');
-    ok('story survives reload without asking again', (await pg.textContent('#resultStory')).includes('fun fact') && seen.jobs.length === before);
+    ok('story survives reload without asking again', (await pg.textContent('#bubbleText')).includes('fun fact') && await pg.isVisible('#bubble') && seen.jobs.length === before);
     ok('no script errors (story and reactions)', errs.length === 0, errs.join(' || '));
     await c.close();
   }
