@@ -214,7 +214,7 @@ const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', n
   {
     // No Turnstile site key: the coordinator would refuse the session, so don't ask at all.
     const c = await browser.newContext({ viewport: { width: 1200, height: 900 }, reducedMotion: 'reduce' });
-    await c.addInitScript(() => { window.PEERBELLY_API = 'https://api.test'; });
+    await c.addInitScript(() => { window.PEERBELLY_API = 'https://api.test'; window.PEERBELLY_TURNSTILE_SITEKEY = ''; });
     let calls = 0;
     await c.route(/https:\/\/(api\.test|challenges\.cloudflare\.com)\//, route => { calls++; route.abort(); });
     const pg = await c.newPage(); await pg.goto(FILE); await pg.waitForSelector('.tile');

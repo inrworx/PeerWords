@@ -42,7 +42,7 @@ None of them affect scoring, and the game never waits on them. Each one works li
 
 If the network is busy or slow, the coordinator sends a simple fallback line instead. If the API cannot be reached at all, the extras are left out and the game plays exactly as before. A full game uses at most 7 requests.
 
-The base URL is `https://api.peerbelly.com`. Set `window.PEERBELLY_API` before the game script to use another server, or to `''` to turn the extras off. A page opened from `file://` skips them unless `window.PEERBELLY_API` is set. `TURNSTILE_SITEKEY` in `index.html` is the Turnstile widget's public site key (`window.PEERBELLY_TURNSTILE_SITEKEY` overrides it); with no site key the extras are off.
+The base URL is `https://api.peerbelly.com`. Set `window.PEERBELLY_API` before the game script to use another server, or to `''` to turn the extras off. A page opened from `file://` skips them unless `window.PEERBELLY_API` is set. `TURNSTILE_SITEKEY` in `index.html` is the Turnstile widget's public site key (the games.peerbelly.com widget) (`window.PEERBELLY_TURNSTILE_SITEKEY` overrides it); with no site key the extras are off.
 
 This follows the node enforcement idea in the PeerBelly blueprint: quorum agreement, canary jobs, strikes, and quarantine.
 

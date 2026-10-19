@@ -550,7 +550,7 @@ const BELLY_API = typeof window.PEERBELLY_API === 'string' ? window.PEERBELLY_AP
   : (location.protocol === 'https:' || location.protocol === 'http:') ? 'https://api.peerbelly.com' : '';
 // The coordinator only starts a session for a page that passes Cloudflare Turnstile.
 // This is the widget's public site key (not a secret); PEERBELLY_TURNSTILE_SITEKEY overrides it.
-const TURNSTILE_SITEKEY = typeof window.PEERBELLY_TURNSTILE_SITEKEY === 'string' ? window.PEERBELLY_TURNSTILE_SITEKEY : '';
+const TURNSTILE_SITEKEY = typeof window.PEERBELLY_TURNSTILE_SITEKEY === 'string' ? window.PEERBELLY_TURNSTILE_SITEKEY : '0x4AAAAAAFcDl_w3ib6U5-_7';
 let bellySession = null;
 let turnstileReady = null, turnstileWidget = null, turnstileWaiter = null;
 function loadTurnstile() {
