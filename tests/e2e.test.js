@@ -154,14 +154,22 @@ const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', n
   // ---- Belly's AI clue, against a mocked PeerBelly Game API
   async function clueRun(mode) {
     const c = await browser.newContext({ viewport: { width: 1200, height: 900 }, reducedMotion: 'reduce' });
-    await c.addInitScript(() => { window.PEERBELLY_API = 'https://api.test'; });
-    const seen = { sessions: 0, jobs: [], polls: 0, keys: [], byId: {} };
+    await c.addInitScript(() => { window.PEERBELLY_API = 'https://api.test'; window.PEERBELLY_TURNSTILE_SITEKEY = '1x00000000000000000000AA'; });
+    const seen = { sessions: 0, jobs: [], polls: 0, keys: [], byId: {}, sessionBodies: [], turnstile: [] };
+    // A stand-in for Cloudflare Turnstile: every render/reset hands back a new token.
+    await c.exposeBinding('__tsSeen', (_src, what) => { seen.turnstile.push(what); });
+    await c.route('https://challenges.cloudflare.com/**', route => route.fulfill({ contentType: 'text/javascript', body: `
+      let n = 0, opts = null;
+      window.turnstile = {
+        render(el, o) { opts = o; __tsSeen({ el, sitekey: o.sitekey, action: o.action, appearance: o.appearance }); setTimeout(() => o.callback('ts-token-' + (++n)), 10); return 'w1'; },
+        reset() { setTimeout(() => opts.callback('ts-token-' + (++n)), 10); },
+      };` }));
     await c.route('https://api.test/**', async route => {
       const req = route.request(), url = new URL(req.url());
       const json = (status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
       if (mode === 'down') return route.abort('connectionrefused');
       if (url.pathname === '/v1/games/sessions') {
-        seen.sessions++;
+        seen.sessions++; seen.sessionBodies.push(JSON.parse(req.postData()));
         return json(201, { sessionId: 'ses_1', token: 'pbgs.test', playerId: 'anon_1', expiresAt: new Date(Date.now() + 9e5).toISOString() });
       }
       if (url.pathname === '/v1/inference') {
@@ -203,9 +211,22 @@ const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', n
     await c.close();
     return out;
   }
+  {
+    // No Turnstile site key: the coordinator would refuse the session, so don't ask at all.
+    const c = await browser.newContext({ viewport: { width: 1200, height: 900 }, reducedMotion: 'reduce' });
+    await c.addInitScript(() => { window.PEERBELLY_API = 'https://api.test'; window.PEERBELLY_TURNSTILE_SITEKEY = ''; });
+    let calls = 0;
+    await c.route(/https:\/\/(api\.test|challenges\.cloudflare\.com)\//, route => { calls++; route.abort(); });
+    const pg = await c.newPage(); await pg.goto(FILE); await pg.waitForSelector('.tile');
+    await pg.click('#hintBtn'); await pg.waitForSelector('#belly:not([hidden])');
+    await pg.waitForTimeout(300);
+    ok('no Turnstile site key: no calls to PeerBelly or Cloudflare', calls === 0, String(calls));
+    await c.close();
+  }
   const good = await clueRun('ok');
   const job = good.seen.jobs[0] || {};
   ok('clue job sent once with the round and answer', good.seen.jobs.length === 1 && job.taskType === 'words.generate_clue' && job.gameId === 'peerwords' && job.sessionId === 'ses_1' && job.input.answer === good.answer && job.input.roundId === `daily-${good.day + 1}`, JSON.stringify(job));
+  ok('session asks Turnstile once, invisibly, and sends its token', good.seen.turnstile.length === 1 && good.seen.turnstile[0].el === '#humanCheck' && good.seen.turnstile[0].appearance === 'interaction-only' && good.seen.turnstile[0].sitekey === '1x00000000000000000000AA' && good.seen.sessionBodies[0].humanToken === 'ts-token-1' && good.seen.sessionBodies[0].gameId === 'peerwords', JSON.stringify([good.seen.turnstile, good.seen.sessionBodies]));
   ok('clue job has session token and idempotency key', good.seen.auth === 'Bearer pbgs.test' && !!good.seen.keys[0], String(good.seen.auth));
   ok('clue shown under the letter hint', good.letterOk && good.text.includes('A tall gray bird that wades in marshes.'), good.text);
   ok('clue survives reload', (good.restored || '').includes('A tall gray bird'), good.restored);

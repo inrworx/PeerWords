@@ -148,6 +148,8 @@
   .btn.gold { background: var(--gold); border-color: var(--gold); color: var(--on-gold); }
   .btn:disabled { opacity: .45; cursor: not-allowed; }
 
+  .human-check { display: flex; justify-content: center; }
+  .human-check:empty { display: none; }
   .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0; text-align: center; }
   .stats div { padding: 8px 4px; border-top: 2px solid var(--line); }
   .stats dt { font: 500 11px/1 var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
@@ -267,6 +269,7 @@
         <button id="hintBtn" class="btn gold" type="button">Ask Belly for a hint</button>
         <button id="modeBtn" class="btn" type="button">Practice word</button>
       </div>
+      <div id="humanCheck" class="human-check"></div>
       <dl class="stats" aria-label="Your stats">
         <div><dt>Played</dt><dd id="stPlayed">0</dd></div>
         <div><dt>Win %</dt><dd id="stWin">0</dd></div>
@@ -545,7 +548,41 @@ $('#resetBtn').addEventListener('click', () => {
 // file:// skip them unless it is set.
 const BELLY_API = typeof window.PEERBELLY_API === 'string' ? window.PEERBELLY_API.replace(/\/+$/, '')
   : (location.protocol === 'https:' || location.protocol === 'http:') ? 'https://api.peerbelly.com' : '';
+// The coordinator only starts a session for a page that passes Cloudflare Turnstile.
+// This is the widget's public site key (not a secret); PEERBELLY_TURNSTILE_SITEKEY overrides it.
+const TURNSTILE_SITEKEY = typeof window.PEERBELLY_TURNSTILE_SITEKEY === 'string' ? window.PEERBELLY_TURNSTILE_SITEKEY : '0x4AAAAAAFcDl_w3ib6U5-_7';
 let bellySession = null;
+let turnstileReady = null, turnstileWidget = null, turnstileWaiter = null;
+function loadTurnstile() {
+  if (!turnstileReady) {
+    turnstileReady = new Promise((resolve, reject) => {
+      const sc = document.createElement('script');
+      sc.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      sc.async = true;
+      sc.onload = () => window.turnstile ? resolve(window.turnstile) : reject(new Error('turnstile'));
+      sc.onerror = () => reject(new Error('turnstile'));
+      document.head.appendChild(sc);
+    });
+    turnstileReady.catch(() => { turnstileReady = null; });
+  }
+  return turnstileReady;
+}
+// A fresh one-time token. Invisible unless Cloudflare wants the player to tick a box.
+async function humanToken(signal) {
+  const ts = await loadTurnstile();
+  return new Promise((resolve, reject) => {
+    const fail = () => { turnstileWaiter = null; reject(new Error('HUMAN_CHECK_FAILED')); };
+    turnstileWaiter = { resolve: t => { turnstileWaiter = null; resolve(t); }, fail };
+    signal.addEventListener('abort', fail, { once: true });
+    if (turnstileWidget === null) {
+      turnstileWidget = ts.render('#humanCheck', {
+        sitekey: TURNSTILE_SITEKEY, action: 'session', appearance: 'interaction-only',
+        callback: t => turnstileWaiter && turnstileWaiter.resolve(t),
+        'error-callback': () => { if (turnstileWaiter) turnstileWaiter.fail(); },
+      });
+    } else ts.reset(turnstileWidget);
+  });
+}
 function bellyId() { return Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, '0')).join(''); }
 async function bellyFetch(path, opts, signal) {
   const r = await fetch(BELLY_API + path, { ...opts, signal, credentials: 'omit' });
@@ -556,15 +593,15 @@ async function bellyFetch(path, opts, signal) {
 // One session at a time, shared by every request (a promise, so parallel asks don't each start one).
 function bellySessionToken(signal) {
   if (bellySession) return bellySession.then(s => Date.parse(s.expiresAt) - Date.now() > 60000 ? s : (bellySession = null, bellySessionToken(signal)));
-  bellySession = bellyFetch('/v1/games/sessions', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ gameId: 'peerwords' })
-  }, signal);
+  bellySession = humanToken(signal).then(token => bellyFetch('/v1/games/sessions', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ gameId: 'peerwords', humanToken: token })
+  }, signal));
   bellySession.catch(() => { bellySession = null; });
   return bellySession;
 }
 // Runs one Game API task. Resolves to the named output field, or null when there is none.
 async function askBelly(taskType, input, field, { deadlineMs = 8000, maxLen = 140 } = {}) {
-  if (!BELLY_API) return null;
+  if (!BELLY_API || !TURNSTILE_SITEKEY) return null;
   const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), deadlineMs + 4000);
   try {
     const ses = await bellySessionToken(ctl.signal);

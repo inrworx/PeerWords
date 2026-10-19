@@ -36,13 +36,13 @@ Three extras come from an AI model on a real PeerBelly node, through the PeerBel
 
 None of them affect scoring, and the game never waits on them. Each one works like this:
 
-1. `POST /v1/games/sessions` with `{gameId: 'peerwords'}` gets an anonymous session. The coordinator only allows this from `https://games.peerbelly.com`, and limits sessions and jobs per IP.
+1. The page gets a one-time token from Cloudflare Turnstile (invisible unless Cloudflare asks the player to tick a box), then `POST /v1/games/sessions` with `{gameId: 'peerwords', humanToken}` gets an anonymous session. The coordinator checks the token with Cloudflare, only allows this from `https://games.peerbelly.com`, and limits sessions and jobs per IP. Scripts without a real browser and player can't get a session.
 2. `POST /v1/inference` submits the job with an `Idempotency-Key`.
 3. `GET /v1/jobs/{jobId}` is polled until the job finishes.
 
 If the network is busy or slow, the coordinator sends a simple fallback line instead. If the API cannot be reached at all, the extras are left out and the game plays exactly as before. A full game uses at most 7 requests.
 
-The base URL is `https://api.peerbelly.com`. Set `window.PEERBELLY_API` before the game script to use another server, or to `''` to turn the extras off. A page opened from `file://` skips them unless `window.PEERBELLY_API` is set.
+The base URL is `https://api.peerbelly.com`. Set `window.PEERBELLY_API` before the game script to use another server, or to `''` to turn the extras off. A page opened from `file://` skips them unless `window.PEERBELLY_API` is set. `TURNSTILE_SITEKEY` in `index.html` is the Turnstile widget's public site key (the games.peerbelly.com widget) (`window.PEERBELLY_TURNSTILE_SITEKEY` overrides it); with no site key the extras are off.
 
 This follows the node enforcement idea in the PeerBelly blueprint: quorum agreement, canary jobs, strikes, and quarantine.
 
