@@ -26,8 +26,14 @@ const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', n
   ok('network panel folded by default on desktop', await page.isHidden('#nodes'));
   const centered = await page.evaluate(() => { const g = document.querySelector('.game').getBoundingClientRect(); return Math.abs((g.left + g.right) / 2 - innerWidth / 2) < 30; });
   ok('game centered while the panel is folded', centered);
+  const topAligned = await page.evaluate(() => { const l = document.querySelector('.logo img').getBoundingClientRect(), b = document.getElementById('board').getBoundingClientRect(); return Math.abs((l.left + l.right) / 2 - (b.left + b.right) / 2) < 12; });
+  ok('logo lined up over the board while folded', topAligned);
+  ok('no Hide button while folded', await page.isHidden('#netHide'));
   await page.click('#netToggle');
-  ok('desktop header opens the panel', await page.isVisible('#nodes'));
+  ok('desktop header opens the panel', await page.isVisible('#nodes') && await page.isVisible('#netHide'));
+  await page.click('#netHide');
+  ok('Hide button folds the panel', await page.isHidden('#nodes'));
+  await page.click('#netToggle');
   ok('logo image decodes', info.logo > 0, String(info.logo));
 
   // too short

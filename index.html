@@ -72,7 +72,7 @@
   .chip { font: 500 12px/1 var(--mono); padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--muted); white-space: nowrap; }
 
   .layout { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 32px; align-items: start; }
-  .layout.net-folded { grid-template-columns: minmax(0, 460px); justify-content: center; }
+  .net-folded .layout { grid-template-columns: minmax(0, 460px); justify-content: center; }
   @media (max-width: 860px) { .layout { grid-template-columns: minmax(0, 1fr); } .game { max-width: 460px; width: 100%; margin: 0 auto; } }
 
   .game { display: grid; gap: 14px; min-width: 0; }
@@ -156,6 +156,12 @@
   .net-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   .chev { flex: none; width: 10px; height: 10px; border-right: 3px solid currentColor; border-bottom: 3px solid currentColor; transform: translateY(-2px) rotate(45deg); transition: transform .15s; }
   .net-toggle[aria-expanded="false"] .chev { transform: translateY(1px) rotate(-45deg); }
+  .net-head-end { display: inline-flex; align-items: center; gap: 8px; }
+  .btn.small { padding: 5px 12px; font-size: 13px; }
+  .btn[hidden] { display: none; }
+  /* Panel folded: one centered column, logo and tagline lined up over the board. */
+  .net-folded .top { flex-direction: column; align-items: center; text-align: center; max-width: 460px; width: 100%; margin-inline: auto; }
+  .net-folded .logo img { margin-inline: auto; }
   .net-body { display: grid; gap: 14px; min-width: 0; }
   .net-body[hidden] { display: none; }
   .pill { font: 500 12px/1 var(--mono); padding: 6px 10px; border-radius: 999px; background: var(--sunk); border: 1px solid var(--line); color: var(--muted); }
@@ -253,7 +259,10 @@
             PeerBelly network <span class="chev" aria-hidden="true"></span>
           </button>
         </h2>
-        <span id="quorum" class="pill">Quorum idle</span>
+        <span class="net-head-end">
+          <span id="quorum" class="pill">Quorum idle</span>
+          <button id="netHide" class="btn small" type="button">Hide</button>
+        </span>
       </div>
       <div id="netBody" class="net-body">
       <p class="net-note">Simulated network running inside this page. Each guess goes to three nodes. They sign what they computed, the coordinator keeps the majority answer, and a node that disagrees gets a strike. Two strikes quarantines it and it stops getting work. Every third job also carries a canary with a known answer.</p>
@@ -855,10 +864,12 @@ function startDaily() {
 function setNetOpen(open, remember) {
   $('#netToggle').setAttribute('aria-expanded', String(open));
   $('#netBody').hidden = !open;
-  document.querySelector('.layout').classList.toggle('net-folded', !open);
+  $('#netHide').hidden = !open;
+  document.body.classList.toggle('net-folded', !open);
   if (remember) store('bw:netOpen', open);
 }
 $('#netToggle').addEventListener('click', () => setNetOpen($('#netBody').hidden, true));
+$('#netHide').addEventListener('click', () => { setNetOpen(false, true); $('#netToggle').focus(); });
 {
   setNetOpen(store('bw:netOpen') === true, false);
 }
