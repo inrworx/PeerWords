@@ -54,6 +54,23 @@ The six scoring nodes run inside the page; only Belly's clue, reactions and word
 
 The single place to replace with the real network is `dispatch()` in `index.html`. It needs to return `{ value, agree, total, degraded }` for a job `{ type: 'score' | 'hint', ... }`. The page does not yet define a wire format for the real network. The signatures are placeholders (FNV hash), not real cryptographic signatures.
 
+## Deploy (PB Gaming server)
+
+Files live in `/var/www/games/words`, served by Caddy under `/words/`, the same way as Belly Cart (`/racing/`). First time, as the admin user on the server:
+
+```bash
+git clone https://github.com/inrworx/PeerWords.git ~/peerwords
+~/peerwords/deploy/deploy-words.sh
+```
+
+If `/words` is not in `/etc/caddy/Caddyfile` yet, add the block from `deploy/Caddyfile.words` inside the `games.peerbelly.com { ... }` site, then:
+
+```bash
+sudo caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy
+```
+
+Later releases: `~/peerwords/deploy/deploy-words.sh`.
+
 ## Word lists
 
 The answer list (643 words) and the extra accepted guesses (about 1,700 words in total) are written into `index.html`. Some real words will be rejected, and plurals are mostly missing. The daily word comes from a fixed shuffle of the answer list indexed by the day number since 2026-01-01.
@@ -73,3 +90,4 @@ npm test
 - `index.html` the whole game (styles, script, and the logo embedded as a data URI)
 - `assets/` the PeerWords logo with a transparent background
 - `tests/` the two test files above
+- `deploy/` the publish script and Caddy block for the PB Gaming server
