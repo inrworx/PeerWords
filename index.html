@@ -106,6 +106,10 @@
   .result h2 { margin: 0; font: 400 26px/1.1 var(--display); color: var(--accent); }
   .result p { margin: 0; color: var(--muted); }
   .result .answer { font: 400 22px/1 var(--display); letter-spacing: .08em; color: var(--ink); text-transform: uppercase; }
+  .result .story { color: var(--ink); font-style: italic; text-align: left; border-left: 4px solid var(--gold); padding-left: 10px; }
+  .result .story.muted { color: var(--muted); }
+  .result .story[hidden] { display: none; }
+  .reaction { margin: 0; min-height: 20px; text-align: center; font-style: italic; color: var(--muted); }
   .result .next { font: 500 13px/1 var(--mono); color: var(--muted); }
 
   .kb { display: grid; gap: 6px; }
@@ -195,11 +199,13 @@
     <section class="game" aria-label="Game">
       <p id="toast" class="status" role="status" aria-live="polite"></p>
       <div id="board" class="board" role="grid" aria-label="Guess board"></div>
+      <p id="reaction" class="reaction" aria-live="polite"></p>
       <div id="belly" class="belly" hidden></div>
       <div id="result" class="result" hidden>
         <h2 id="resultTitle"></h2>
         <p id="resultSub"></p>
         <div id="resultAnswer" class="answer"></div>
+        <p id="resultStory" class="story" hidden></p>
         <div class="actions">
           <button id="shareBtn" class="btn primary" type="button">Copy result</button>
         </div>
@@ -470,14 +476,15 @@ $('#resetBtn').addEventListener('click', () => {
   setQuorum('Quorum idle', ''); renderNodes();
 });
 
-/* ---------- Belly's AI clue (PeerBelly Game API) ---------- */
-// The letter hint above stays the game's real hint. This asks the PeerBelly
-// network for a one-line clue on top of it. Any failure just leaves the clue
-// out. Set window.PEERBELLY_API before this script to point at another server,
-// or to '' to turn the clue off. Pages opened from file:// skip it unless set.
+/* ---------- Belly on the PeerBelly network (Game API) ---------- */
+// Three extras written by an AI model on a PeerBelly node: a clue with the
+// letter hint, a short reaction after each guess, and a word story when the
+// round ends. The game never waits on them and never scores with them; any
+// failure just leaves them out. Set window.PEERBELLY_API before this script to
+// point at another server, or to '' to turn them off. Pages opened from
+// file:// skip them unless it is set.
 const BELLY_API = typeof window.PEERBELLY_API === 'string' ? window.PEERBELLY_API.replace(/\/+$/, '')
   : (location.protocol === 'https:' || location.protocol === 'http:') ? 'https://api.peerbelly.com' : '';
-const BELLY_TIMEOUT_MS = 12000;
 let bellySession = null;
 function bellyId() { return Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, '0')).join(''); }
 async function bellyFetch(path, opts, signal) {
@@ -486,37 +493,40 @@ async function bellyFetch(path, opts, signal) {
   if (!r.ok) throw new Error((body && body.error && body.error.code) || `HTTP ${r.status}`);
   return body;
 }
-async function bellySessionToken(signal) {
-  if (bellySession && Date.parse(bellySession.expiresAt) - Date.now() > 60000) return bellySession;
-  bellySession = await bellyFetch('/v1/games/sessions', {
+// One session at a time, shared by every request (a promise, so parallel asks don't each start one).
+function bellySessionToken(signal) {
+  if (bellySession) return bellySession.then(s => Date.parse(s.expiresAt) - Date.now() > 60000 ? s : (bellySession = null, bellySessionToken(signal)));
+  bellySession = bellyFetch('/v1/games/sessions', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ gameId: 'peerwords' })
   }, signal);
+  bellySession.catch(() => { bellySession = null; });
   return bellySession;
 }
-// Resolves to the clue text, or null when there is none.
-async function askBellyClue(answer, roundId) {
+// Runs one Game API task. Resolves to the named output field, or null when there is none.
+async function askBelly(taskType, input, field, { deadlineMs = 8000, maxLen = 140 } = {}) {
   if (!BELLY_API) return null;
-  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), BELLY_TIMEOUT_MS);
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), deadlineMs + 4000);
   try {
     const ses = await bellySessionToken(ctl.signal);
-    const auth = { Authorization: `Bearer ${ses.token}` }, key = `${roundId}-${bellyId()}`;
+    const auth = { Authorization: `Bearer ${ses.token}` }, key = `${input.roundId}-${bellyId()}`;
     let job = await bellyFetch('/v1/inference', {
       method: 'POST',
       headers: { ...auth, 'Content-Type': 'application/json', 'Idempotency-Key': key },
-      body: JSON.stringify({ gameId: 'peerwords', taskType: 'words.generate_clue', sessionId: ses.sessionId,
-        requestId: key, input: { roundId, answer }, constraints: { deadlineMs: 8000 } })
+      body: JSON.stringify({ gameId: 'peerwords', taskType, sessionId: ses.sessionId,
+        requestId: key, input, constraints: { deadlineMs } })
     }, ctl.signal);
     while (job.status === 'queued' || job.status === 'running') {
-      await new Promise(r => setTimeout(r, 700));
+      await new Promise(r => setTimeout(r, 600));
       job = await bellyFetch(`/v1/jobs/${encodeURIComponent(job.jobId)}`, { headers: auth }, ctl.signal);
     }
-    const clue = job.status === 'completed' && job.result && job.result.output && job.result.output.clue;
-    return typeof clue === 'string' && clue.trim() ? clue.trim().slice(0, 140) : null;
+    const text = job.status === 'completed' && job.result && job.result.output && job.result.output[field];
+    return typeof text === 'string' && text.trim() ? text.trim().slice(0, maxLen) : null;
   } catch (e) {
     if (e && e.message === 'UNAUTHORIZED') bellySession = null;
     return null;
   } finally { clearTimeout(timer); }
 }
+const askBellyClue = (answer, roundId) => askBelly('words.generate_clue', { roundId, answer }, 'clue');
 
 /* ---------- game ---------- */
 let S = null;
@@ -526,7 +536,8 @@ function say(text, sticky) {
   if (!sticky) toastTimer = setTimeout(() => { if (t.textContent === text) t.textContent = ''; }, 2400);
 }
 function freshState(answer, mode) {
-  return { answer, mode, guesses: [], patterns: [], cur: '', status: 'playing', busy: false, hint: null };
+  return { answer, mode, guesses: [], patterns: [], cur: '', status: 'playing', busy: false, hint: null, story: null,
+    roundId: mode === 'daily' ? `daily-${DAY_NUM + 1}` : `practice-${bellyId()}` };
 }
 
 const tiles = [];
@@ -637,12 +648,22 @@ async function submit() {
   else say(out.degraded ? 'Network degraded, scored locally' : '');
   S.busy = false;
   if (S.status !== 'playing') finish(true);
+  else bellyReact(g, pattern);
   saveDaily(); setButtons();
 }
+// Belly's line about the guess just made. Never sees the answer; dropped if a newer guess beat it.
+async function bellyReact(guess, pattern) {
+  if (!BELLY_API) return;
+  const state = S, n = S.guesses.length;
+  setReaction('');
+  const line = await askBelly('words.react_guess', { roundId: state.roundId, guess, pattern, guessNumber: n }, 'line', { deadlineMs: 5000, maxLen: 100 });
+  if (line && S === state && S.guesses.length === n && S.status === 'playing') setReaction(line);
+}
+function setReaction(text) { $('#reaction').textContent = text ? `Belly: ${text}` : ''; }
 
 function saveDaily() {
   if (S.mode !== 'daily') return;
-  store('bw:daily', { key: TODAY_KEY, guesses: S.guesses, status: S.status, hint: S.hint });
+  store('bw:daily', { key: TODAY_KEY, guesses: S.guesses, status: S.status, hint: S.hint, story: S.story });
 }
 function loadStats() { return store('bw:stats') || { played: 0, wins: 0, streak: 0, best: 0, dist: [0, 0, 0, 0, 0, 0], lastWin: '' }; }
 function renderStats() {
@@ -670,7 +691,28 @@ function finish(live) {
   $('#resultAnswer').textContent = won ? '' : S.answer;
   $('#resultAnswer').hidden = won;
   $('#result').hidden = false;
+  setReaction('');
+  renderStory();
   tickNext();
+  if (!S.story) bellyStory();
+}
+function renderStory() {
+  const p = $('#resultStory');
+  p.classList.toggle('muted', !S.story);
+  p.textContent = S.story || (S.storyLoading ? 'Belly is looking up the word…' : '');
+  p.hidden = !p.textContent;
+}
+// After the round: what the word means and a fun fact. Saved with the daily game.
+async function bellyStory() {
+  if (!BELLY_API || S.storyLoading) return;
+  const state = S;
+  state.storyLoading = true; renderStory();
+  const story = await askBelly('words.word_story',
+    { roundId: state.roundId, answer: state.answer, solved: state.status === 'won', guesses: state.guesses.length },
+    'story', { deadlineMs: 10000, maxLen: 280 });
+  state.storyLoading = false;
+  if (story) state.story = story;
+  if (S === state) { renderStory(); saveDaily(); }
 }
 function shareText() {
   const sq = { G: '🟩', Y: '🟨', B: '⬛' };
@@ -725,7 +767,7 @@ $('#hintBtn').addEventListener('click', async () => {
   const [p, letter] = out.value.split(':');
   S.hint = { pos: Number(p), letter, note: out.degraded ? 'scored locally, unsigned' : `verified by ${out.agree}/${out.total} nodes` };
   S.busy = false; say(''); renderHint(); saveDaily(); setButtons();
-  const hint = S.hint, round = S.mode === 'daily' ? `daily-${DAY_NUM + 1}` : `practice-${bellyId()}`;
+  const hint = S.hint, round = S.roundId;
   if (!BELLY_API) return;
   hint.clueLoading = true; renderHint();
   const clue = await askBellyClue(S.answer, round);
@@ -742,7 +784,7 @@ $('#modeBtn').addEventListener('click', () => {
 });
 
 function start(state) {
-  S = state; buildBoard(); buildKeys(); say('');
+  S = state; buildBoard(); buildKeys(); say(''); setReaction('');
   $('#result').hidden = true; renderHint(); setButtons();
 }
 function startDaily() {
@@ -754,6 +796,7 @@ function startDaily() {
       S.guesses.push(g); S.patterns.push(pattern); setRowStatic(r, g, pattern); updateKeys(g, pattern);
     });
     S.hint = p.hint || null;
+    S.story = typeof p.story === 'string' ? p.story : null;
     if (S.hint) delete S.hint.clueLoading; // a reload mid-request: that clue is gone
     S.status = S.patterns.includes('GGGGG') ? 'won' : S.guesses.length >= 6 ? 'lost' : 'playing';
     renderHint();

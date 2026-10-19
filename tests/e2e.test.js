@@ -126,7 +126,7 @@ const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', n
   async function clueRun(mode) {
     const c = await browser.newContext({ viewport: { width: 1200, height: 900 }, reducedMotion: 'reduce' });
     await c.addInitScript(() => { window.PEERBELLY_API = 'https://api.test'; });
-    const seen = { sessions: 0, jobs: [], polls: 0, keys: [] };
+    const seen = { sessions: 0, jobs: [], polls: 0, keys: [], byId: {} };
     await c.route('https://api.test/**', async route => {
       const req = route.request(), url = new URL(req.url());
       const json = (status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
@@ -136,21 +136,31 @@ const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', n
         return json(201, { sessionId: 'ses_1', token: 'pbgs.test', playerId: 'anon_1', expiresAt: new Date(Date.now() + 9e5).toISOString() });
       }
       if (url.pathname === '/v1/inference') {
-        seen.jobs.push(JSON.parse(req.postData())); seen.keys.push(req.headers()['idempotency-key']);
+        const body = JSON.parse(req.postData());
+        seen.jobs.push(body); seen.keys.push(req.headers()['idempotency-key']);
         seen.auth = req.headers()['authorization'];
         if (mode === 'limited') return json(429, { error: { code: 'RATE_LIMITED', message: 'slow down' } });
-        return json(202, { jobId: 'job_1', status: 'queued' });
+        const id = `job_${seen.jobs.length}`;
+        seen.byId[id] = { body, polls: 0 };
+        return json(202, { jobId: id, status: 'queued' });
       }
-      if (url.pathname === '/v1/jobs/job_1') {
-        seen.polls++;
-        if (seen.polls < 2) return json(200, { jobId: 'job_1', status: 'running' });
-        return json(200, { jobId: 'job_1', status: 'completed', result: { schema: 'peerwords.clue.v1', output: { clue: 'A tall gray bird that wades in marshes.' }, fallback: false } });
+      const m = url.pathname.match(/^\/v1\/jobs\/(job_\d+)$/);
+      if (m && seen.byId[m[1]]) {
+        const j = seen.byId[m[1]]; seen.polls++;
+        if (++j.polls < 2) return json(200, { jobId: m[1], status: 'running' });
+        const outputs = {
+          'words.generate_clue': { clue: 'A tall gray bird that wades in marshes.' },
+          'words.react_guess': { line: `Guess ${j.body.input.guessNumber}, keep it up!` },
+          'words.word_story': { story: 'A short story about the word, with one fun fact.' },
+        };
+        return json(200, { jobId: m[1], status: 'completed', result: { schema: 'x', output: outputs[j.body.taskType], fallback: false } });
       }
       return json(404, { error: { code: 'JOB_NOT_FOUND', message: 'no' } });
     });
     const pg = await c.newPage();
     const errs = []; pg.on('pageerror', e => errs.push(e.message));
     await pg.goto(FILE); await pg.waitForSelector('.tile');
+    if (mode === 'game') return { c, pg, seen, errs };
     await pg.click('#hintBtn');
     await pg.waitForSelector('#belly:not([hidden])', { timeout: 8000 });
     const letterOk = /slot \d is the letter [A-Z]/.test(await pg.textContent('#belly'));
@@ -175,6 +185,35 @@ const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', n
     const r = await clueRun(mode);
     ok(`API ${mode}: letter hint still shown, no clue`, r.letterOk && !r.hint.clue && !/thinking/.test(r.text), r.text);
     ok(`API ${mode}: no script errors`, r.errs.length === 0, r.errs.join(' || '));
+  }
+
+  // ---- Belly reacts to guesses and tells the word's story at the end (mocked API)
+  {
+    const { c, pg, seen, errs } = await clueRun('game');
+    const ans = await pg.evaluate(() => DAILY_ANSWER);
+    const wrong = await pg.evaluate(a => [...VALID].filter(w => w !== a && !w.split('').some(ch => a.includes(ch))).slice(0, 2), ans);
+    for (const [i, w] of wrong.entries()) {
+      await pg.keyboard.type(w); await pg.keyboard.press('Enter');
+      await pg.waitForFunction(n => S.guesses.length === n && !S.busy, i + 1, { timeout: 8000 });
+      await pg.waitForFunction(n => document.getElementById('reaction').textContent.includes(`Guess ${n}`), i + 1, { timeout: 8000 });
+    }
+    const reacts = seen.jobs.filter(j => j.taskType === 'words.react_guess');
+    ok('a reaction is asked for after each guess', reacts.length === 2 && reacts[1].input.guessNumber === 2 && /^[GYB]{5}$/.test(reacts[0].input.pattern), JSON.stringify(reacts.map(r => r.input)));
+    ok('reactions never send the answer', reacts.every(r => !('answer' in r.input) && !JSON.stringify(r).includes(ans)));
+    ok('reaction shown under the board', /Belly: Guess 2, keep it up!/.test(await pg.textContent('#reaction')));
+    await pg.keyboard.type(ans); await pg.keyboard.press('Enter');
+    await pg.waitForSelector('#result:not([hidden])', { timeout: 10000 });
+    await pg.waitForFunction(() => document.getElementById('resultStory').textContent.includes('fun fact'), null, { timeout: 10000 });
+    const story = seen.jobs.find(j => j.taskType === 'words.word_story');
+    ok('story asked for once the round ends', !!story && story.input.answer === ans && story.input.solved === true && story.input.guesses === 3, JSON.stringify(story && story.input));
+    ok('no reaction for the winning guess', seen.jobs.filter(j => j.taskType === 'words.react_guess').length === 2);
+    ok('reaction cleared when the round ends', (await pg.textContent('#reaction')) === '');
+    await pg.screenshot({ path: path.join(OUT, 'shot-story.png'), fullPage: true });
+    const before = seen.jobs.length;
+    await pg.reload(); await pg.waitForSelector('.tile');
+    ok('story survives reload without asking again', (await pg.textContent('#resultStory')).includes('fun fact') && seen.jobs.length === before);
+    ok('no script errors (story and reactions)', errs.length === 0, errs.join(' || '));
+    await c.close();
   }
 
   // ---- on-screen keyboard works
