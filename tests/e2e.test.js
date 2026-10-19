@@ -23,7 +23,11 @@ const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', n
   ok('board has 30 tiles', info.tiles === 30);
   ok('keyboard has 28 keys', info.keys === 28, String(info.keys));
   ok('6 nodes rendered', info.nodes === 6);
-  ok('network panel open by default on desktop', await page.isVisible('#nodes'));
+  ok('network panel folded by default on desktop', await page.isHidden('#nodes'));
+  const centered = await page.evaluate(() => { const g = document.querySelector('.game').getBoundingClientRect(); return Math.abs((g.left + g.right) / 2 - innerWidth / 2) < 30; });
+  ok('game centered while the panel is folded', centered);
+  await page.click('#netToggle');
+  ok('desktop header opens the panel', await page.isVisible('#nodes'));
   ok('logo image decodes', info.logo > 0, String(info.logo));
 
   // too short

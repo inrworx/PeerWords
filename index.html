@@ -72,6 +72,7 @@
   .chip { font: 500 12px/1 var(--mono); padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--muted); white-space: nowrap; }
 
   .layout { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 32px; align-items: start; }
+  .layout.net-folded { grid-template-columns: minmax(0, 460px); justify-content: center; }
   @media (max-width: 860px) { .layout { grid-template-columns: minmax(0, 1fr); } .game { max-width: 460px; width: 100%; margin: 0 auto; } }
 
   .game { display: grid; gap: 14px; min-width: 0; }
@@ -849,16 +850,17 @@ function startDaily() {
   setButtons();
 }
 
-// The network panel folds away so the board has the screen; folded by default on phones.
+// The network panel folds away so the board has the screen. It starts folded; folded, the game
+// sits centered with the panel's title bar under it.
 function setNetOpen(open, remember) {
   $('#netToggle').setAttribute('aria-expanded', String(open));
   $('#netBody').hidden = !open;
-  if (remember) store('bw:net', open ? 'open' : 'closed');
+  document.querySelector('.layout').classList.toggle('net-folded', !open);
+  if (remember) store('bw:netOpen', open);
 }
 $('#netToggle').addEventListener('click', () => setNetOpen($('#netBody').hidden, true));
 {
-  const saved = store('bw:net');
-  setNetOpen(saved ? saved === 'open' : !matchMedia('(max-width: 860px)').matches, false);
+  setNetOpen(store('bw:netOpen') === true, false);
 }
 
 renderNodes();

@@ -48,7 +48,7 @@ This follows the node enforcement idea in the PeerBelly blueprint: quorum agreem
 
 ## What is simulated
 
-The network panel folds away by tapping its title, so the board has the screen. It starts folded on phones and open on wider screens, and the page remembers your choice.
+The network panel folds away by tapping its title, so the board has the screen. It starts folded on every screen size, with the game centered, and the page remembers your choice once you open it.
 
 The six scoring nodes run inside the page; only Belly's clue, reactions and word story contact a PeerBelly server. "Corrupt a node" makes one simulated node return tampered results so you can watch the quorum catch it.
 
